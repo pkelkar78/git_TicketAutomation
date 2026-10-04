@@ -1,0 +1,120 @@
+# Kick-off backlog for a new production service.
+#
+# {{double_braces}} are filled from `variables` (plus built-ins project_key and today).
+# Quote any value that STARTS with {{ — YAML would otherwise read it as a mapping.
+# Every epic and story needs a stable `id`: it is how re-runs recognise tickets
+# that already exist. Changing an id makes the script treat it as a new ticket.
+
+name: new-service
+description: Standard backlog for bootstrapping a new production service.
+
+variables:
+  service_name:
+    description: Human-readable service name, e.g. "Payments API"
+    required: true
+  team:
+    description: Owning team, used in descriptions
+    default: Platform
+  start_date:
+    description: Kick-off date (YYYY-MM-DD); relative due dates count from it
+    default: "{{today}}"
+  tech_lead:
+    description: Optional Jira accountId to assign the epics to
+    default: ""
+
+defaults:                 # applied to every ticket (labels are merged, the rest can be overridden)
+  labels: [new-service]
+
+epics:
+  - id: setup
+    summary: "{{service_name}}: project setup and governance"
+    assignee: "{{tech_lead}}"
+    due: +1w
+    description: |
+      Everything needed before the first line of production code.
+      Owning team: **{{team}}**
+    stories:
+      - id: setup.charter
+        summary: Write the service charter and success metrics
+        points: 2
+        due: +3bd
+        description: |
+          ## Definition of done
+          - [ ] Problem statement and non-goals agreed
+          - [ ] Draft SLOs for availability and latency
+          - [ ] Reviewed with the product owner
+      - id: setup.adr
+        summary: Record initial architecture decisions (ADRs)
+        points: 3
+        depends_on: [setup.charter]
+        subtasks:                     # plain strings are fine for sub-tasks
+          - Data store selection
+          - Sync vs async integration style
+          - Multi-region and DR strategy
+
+  - id: infra
+    summary: "{{service_name}}: infrastructure and environments"
+    assignee: "{{tech_lead}}"
+    stories:
+      - id: infra.projects
+        summary: Provision cloud projects for dev, staging and prod
+        points: 5
+        depends_on: [setup.adr]
+        subtasks:
+          - Create projects with Terraform
+          - Configure IAM roles and service accounts
+          - Set budgets and billing alerts
+      - id: infra.network
+        summary: Networking, private service access and egress controls
+        points: 5
+        depends_on: [infra.projects]
+
+  - id: delivery
+    summary: "{{service_name}}: CI/CD pipeline"
+    stories:
+      - id: delivery.ci
+        summary: Build, test and scan on every pull request
+        points: 3
+        description: |
+          Stages: lint, unit tests, container build, vulnerability scan.
+          Block merges on **critical** findings.
+      - id: delivery.cd
+        summary: Progressive deployment to staging and prod
+        points: 5
+        depends_on: [delivery.ci, infra.projects]
+        subtasks:
+          - Canary release with automatic rollback
+          - Manual approval gate for prod
+
+  - id: observability
+    summary: "{{service_name}}: observability"
+    stories:
+      - id: observability.slo
+        summary: Dashboards, SLO burn-rate alerts and on-call routing
+        points: 3
+        depends_on: [delivery.cd]
+      - id: observability.runbook
+        summary: Runbook for the top failure modes
+        points: 2
+
+  - include: fragments/security-review.yaml   # reusable epic shared by several templates
+
+  - id: golive
+    summary: "{{service_name}}: production readiness"
+    due: +8w
+    stories:
+      - id: golive.review
+        summary: Production readiness review
+        points: 2
+        priority: High
+        due: +7w
+        depends_on: [observability.slo, security.pentest]
+      - id: golive.launch
+        summary: Launch and two weeks of hypercare
+        depends_on: [golive.review]
+
+# Stories without an epic
+stories:
+  - id: chores.access
+    summary: "Grant {{team}} access to the {{project_key}} board and repositories"
+    points: 1

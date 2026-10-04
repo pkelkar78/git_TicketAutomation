@@ -1,0 +1,28 @@
+# Reusable fragment. Include it from any template's `epics:` list with
+#   - include: fragments/security-review.yaml
+# Keep fragments self-contained: they may depend on their own ids, and the
+# including template may depend on them (e.g. depends_on: [security.pentest]).
+variables:
+  service_name:
+    description: Human-readable service name
+    required: true
+
+epics:
+  - id: security
+    summary: "{{service_name}}: security review"
+    labels: [security]
+    stories:
+      - id: security.threat-model
+        summary: Threat model (STRIDE) and data-flow diagram
+        points: 3
+      - id: security.secrets
+        summary: Secrets in a managed vault, none in code or CI variables
+        points: 2
+      - id: security.sast
+        summary: SAST and dependency scanning in CI
+        points: 2
+      - id: security.pentest
+        summary: External penetration test and remediation
+        points: 5
+        due: +6w
+        depends_on: [security.threat-model]

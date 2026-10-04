@@ -1,0 +1,86 @@
+name: Jira tickets from template
+
+on:
+  # Run from the Actions tab: "Jira tickets from template" -> "Run workflow"
+  workflow_dispatch:
+    inputs:
+      template:
+        description: "Template name (file in templates/, without .yaml)"
+        required: true
+        default: new-service
+      project_key:
+        description: "Jira project key, e.g. PAY"
+        required: true
+      vars:
+        description: "Template variables, e.g.  service_name=Payments API; start_date=2026-11-02"
+        required: false
+        default: ""
+      run_key:
+        description: "Optional. Only needed to apply the same template twice to one project"
+        required: false
+        default: ""
+      dry_run:
+        description: "Preview only (nothing is created). Untick to create the tickets."
+        type: boolean
+        default: true
+
+  # Offline validation of templates on every pull request that touches them
+  pull_request:
+    paths:
+      - "templates/**"
+      - "config.yaml"
+      - "create_tickets.py"
+      - "requirements.txt"
+
+permissions:
+  contents: read
+
+# Never run two creations against the same Jira project at once
+concurrency:
+  group: jira-tickets-${{ inputs.project_key || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Validate templates
+        run: python create_tickets.py --validate --template templates/*.yaml
+
+  create:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Optional: add required reviewers to this environment in repo settings to gate real runs
+    environment: jira
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Create tickets
+        # Inputs are passed through env vars, never interpolated into the script (prevents injection)
+        env:
+          JIRA_BASE_URL: ${{ vars.JIRA_BASE_URL }}
+          JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
+          JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+          TEMPLATE: ${{ inputs.template }}
+          PROJECT_KEY: ${{ inputs.project_key }}
+          TEMPLATE_VARS: ${{ inputs.vars }}
+          RUN_KEY: ${{ inputs.run_key }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          args=(--template "$TEMPLATE" --project "$PROJECT_KEY" --vars "$TEMPLATE_VARS")
+          if [ -n "$RUN_KEY" ]; then args+=(--run-key "$RUN_KEY"); fi
+          if [ "$DRY_RUN" = "true" ]; then args+=(--dry-run); fi
+          python create_tickets.py "${args[@]}"

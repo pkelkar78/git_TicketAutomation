@@ -1,0 +1,18 @@
+# Settings for your Jira site, shared by every template.
+
+issue_types:
+  epic: Epic
+  story: Story              # if the project has no "Story", "Task" is used
+  subtask: Subtask          # older sites call it "Sub-task"; any sub-task type is auto-detected
+
+# Field used for `points:` in templates. Team-managed projects use
+# "Story point estimate"; company-managed ones usually "Story Points".
+# A raw id such as customfield_10016 also works (needed if two fields share a name).
+story_points_field: Story point estimate
+
+# Link type for `depends_on`. Its outward label should read "<blocker> blocks <blocked>".
+link_type: Blocks
+
+# Prefix for the bookkeeping labels that make re-runs idempotent,
+# e.g. tpl-new-service and tpl-new-service--infra.projects
+label_prefix: tpl
